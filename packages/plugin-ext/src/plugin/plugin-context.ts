@@ -72,8 +72,11 @@ import {
     WorkspaceEdit,
     SymbolInformation,
     FileType,
-    FileChangeType
-} from './types-impl';
+    FileChangeType,
+    Breakpoint,
+    SourceBreakpoint,
+    FunctionBreakpoint
+ } from './types-impl';
 import { EditorsAndDocumentsExtImpl } from './editors-and-documents';
 import { TextEditorsExtImpl } from './text-editors';
 import { DocumentsExtImpl } from './documents';
@@ -88,6 +91,7 @@ import { DialogsExtImpl } from './dialogs';
 import { CancellationToken } from '@theia/core/lib/common/cancellation';
 import { MarkdownString } from './markdown-string';
 import { TreeViewsExtImpl } from './tree/tree-views';
+import { DebugExtImpl } from './debug/debug';
 
 export function createAPIFactory(
     rpc: RPCProtocol,
@@ -109,6 +113,7 @@ export function createAPIFactory(
     const outputChannelRegistryExt = new OutputChannelRegistryExt(rpc);
     const languagesExt = rpc.set(MAIN_RPC_CONTEXT.LANGUAGES_EXT, new LanguagesExtImpl(rpc, documents, commandRegistry));
     const treeViewsExt = rpc.set(MAIN_RPC_CONTEXT.TREE_VIEWS_EXT, new TreeViewsExtImpl(rpc, commandRegistry));
+    const debugExt = rpc.set(MAIN_RPC_CONTEXT.DEBUG_EXT, new DebugExtImpl(rpc));
 
     return function (plugin: InternalPlugin): typeof theia {
         const commands: typeof theia.commands = {
@@ -398,17 +403,43 @@ export function createAPIFactory(
         };
 
         const debug: typeof theia.debug = {
-            onDidChangeActiveDebugSession(listener, thisArg?, disposables?) {
-                // FIXME: to implement
-                return new Disposable(() => { });
+            get activeDebugSession(): theia.DebugSession | undefined {
+                return debugExt.activeDebugSession;
             },
-            onDidTerminateDebugSession(listener, thisArg?, disposables?) {
-                // FIXME: to implement
-                return new Disposable(() => { });
+            get activeDebugConsole(): theia.DebugConsole {
+                return debugExt.activeDebugConsole;
             },
-            registerDebugConfigurationProvider(debugType: string, provider: theia.DebugConfigurationProvider): theia.Disposable {
-                // FIXME: to implement
-                return new Disposable(() => { });
+            get breakpoints(): theia.Breakpoint[] {
+                return debugExt.breakpoints;
+            },
+            get onDidChangeActiveDebugSession(): theia.Event<theia.DebugSession | undefined> {
+                return debugExt.onDidChangeActiveDebugSession;
+            },
+            get onDidStartDebugSession(): theia.Event<theia.DebugSession> {
+                return debugExt.onDidStartDebugSession;
+            },
+            get onDidReceiveDebugSessionCustomEvent(): theia.Event<theia.DebugSessionCustomEvent> {
+                return debugExt.onDidReceiveDebugSessionCustomEvent;
+            },
+            get onDidTerminateDebugSession(): theia.Event<theia.DebugSession> {
+                return debugExt.onDidTerminateDebugSession;
+            },
+            get onDidChangeBreakpoints(): theia.Event<theia.BreakpointsChangeEvent> {
+                return debugExt.onDidChangeBreakpoints;
+            },
+            registerDebugConfigurationProvider(debugType: string, provider: theia.DebugConfigurationProvider): Disposable {
+                const pluginId = plugin.model.publisher + '.' + plugin.model.name;
+                const contribution = plugin.rawModel.contributes && plugin.rawModel.contributes.debuggers || [];
+                return debugExt.registerDebugConfigurationProvider(debugType, provider, pluginId, contribution);
+            },
+            startDebugging(folder: theia.WorkspaceFolder | undefined, nameOrConfiguration: string | theia.DebugConfiguration): Thenable<boolean> {
+                return debugExt.startDebugging(folder, nameOrConfiguration);
+            },
+            addBreakpoints(breakpoints: theia.Breakpoint[]): void {
+                debugExt.addBreakpoints(breakpoints);
+            },
+            removeBreakpoints(breakpoints: theia.Breakpoint[]): void {
+                debugExt.removeBreakpoints(breakpoints);
             }
         };
 
@@ -472,8 +503,11 @@ export function createAPIFactory(
             WorkspaceEdit,
             SymbolInformation,
             FileType,
-            FileChangeType
-        };
+            FileChangeType,
+            Breakpoint,
+            SourceBreakpoint,
+            FunctionBreakpoint
+       };
     };
 }
 

@@ -299,3 +299,12 @@ export interface WorkspaceEdit {
     edits: Array<ResourceTextEdit | ResourceFileEdit>;
     rejectReason?: string;
 }
+
+export interface Breakpoint {
+    readonly enabled: boolean;
+    readonly condition?: string;
+    readonly hitCondition?: string;
+    readonly logMessage?: string;
+    readonly location?: Location;
+    readonly functionName?: string;
+}

@@ -37,6 +37,11 @@ export interface DebugConfiguration {
      */
     [key: string]: any;
 
+	/**
+	 * The request type of the debug adapter session.
+	 */
+    request: string;
+
     /**
      * If noDebug is true the launch request should launch the program without enabling debugging.
      */
@@ -60,6 +65,6 @@ export interface DebugConfiguration {
 }
 export namespace DebugConfiguration {
     export function is(arg: DebugConfiguration | any): arg is DebugConfiguration {
-        return !!arg && 'type' in arg && 'name' in arg;
+        return !!arg && 'type' in arg && 'name' in arg && 'request' in arg;
     }
 }
