@@ -20,7 +20,7 @@ import { injectable, inject, named, postConstruct } from 'inversify';
 import { Emitter, Event, ContributionProvider, DisposableCollection, MessageService } from '@theia/core';
 import { LabelProvider } from '@theia/core/lib/browser';
 import { EditorManager } from '@theia/editor/lib/browser';
-import { DebugService, DebugError } from '../common/debug-service';
+import { DebugError } from '../common/debug-service';
 import { DebugState, DebugSession } from './debug-session';
 import { DebugSessionContribution, DebugSessionFactory } from './debug-session-contribution';
 import { DebugThread } from './model/debug-thread';
@@ -30,6 +30,7 @@ import { BreakpointManager } from './breakpoint/breakpoint-manager';
 import URI from '@theia/core/lib/common/uri';
 import { VariableResolverService } from '@theia/variable-resolver/lib/browser';
 import { DebugSessionOptions, InternalDebugSessionOptions } from './debug-session-options';
+import { DebugContributionManager } from './debug-contribution-manager';
 
 export interface DidChangeActiveDebugSession {
     previous: DebugSession | undefined
@@ -79,8 +80,8 @@ export class DebugSessionManager {
     @inject(ContributionProvider) @named(DebugSessionContribution)
     protected readonly contributions: ContributionProvider<DebugSessionContribution>;
 
-    @inject(DebugService)
-    protected readonly debugService: DebugService;
+    @inject(DebugContributionManager)
+    protected readonly debugManager: DebugContributionManager;
 
     @inject(LabelProvider)
     protected readonly labelProvider: LabelProvider;
@@ -108,7 +109,7 @@ export class DebugSessionManager {
     async start(options: DebugSessionOptions): Promise<DebugSession> {
         try {
             const resolved = await this.resolveConfiguration(options);
-            const sessionId = await this.debugService.create(resolved.configuration);
+            const sessionId = await this.debugManager.create(resolved.configuration);
             return this.doStart(sessionId, resolved);
         } catch (e) {
             if (DebugError.NotFound.is(e)) {
@@ -123,7 +124,7 @@ export class DebugSessionManager {
             return options;
         }
         const { workspaceFolderUri } = options;
-        const resolvedConfiguration = await this.debugService.resolveDebugConfiguration(options.configuration, workspaceFolderUri);
+        const resolvedConfiguration = await this.debugManager.resolveDebugConfiguration(options.configuration, workspaceFolderUri);
         const configuration = await this.variableResolver.resolve(resolvedConfiguration);
         const key = configuration.name + workspaceFolderUri;
         const id = this.configurationIds.has(key) ? this.configurationIds.get(key)! + 1 : 0;
@@ -284,7 +285,7 @@ export class DebugSessionManager {
     }
 
     private doDestroy(session: DebugSession): void {
-        this.debugService.stop(session.id);
+        this.debugManager.stop(session.configuration.type, session.id);
 
         session.dispose();
         this.remove(session.id);

@@ -18,7 +18,7 @@
 
 import { createProxyIdentifier, ProxyIdentifier } from './rpc-protocol';
 import * as theia from '@theia/plugin';
-import { PluginLifecycle, PluginModel, PluginMetadata, PluginPackage } from '../common/plugin-protocol';
+import { PluginLifecycle, PluginModel, PluginMetadata, PluginPackage, PluginPackageDebuggersContribution } from '../common/plugin-protocol';
 import { QueryParameters } from '../common/env';
 import { TextEditorCursorStyle } from '../common/editor-options';
 import { TextEditorLineNumbersStyle, EndOfLine, OverviewRulerLane, IndentAction, FileOperationOptions } from '../plugin/types-impl';
@@ -781,18 +781,15 @@ export interface DebugExt {
     $sessionDidCreate(sessionId: string, debugConfiguration: theia.DebugConfiguration): void;
     $sessionDidDestroy(sessionId: string, debugConfiguration: theia.DebugConfiguration): void;
     $sessionDidChange(sessionId: string | undefined, debugConfiguration?: theia.DebugConfiguration): void;
-    $provideDebugConfigurations(providerId: string,
-        folder: string | undefined): Promise<theia.DebugConfiguration[]>;
-    $resolveDebugConfigurations(providerId: string,
-        folder: string | undefined,
-        debugConfiguration: theia.DebugConfiguration): Promise<theia.DebugConfiguration | undefined>;
+    $provideDebugConfigurations(contributionId: string, folder: string | undefined): Promise<theia.DebugConfiguration[]>;
+    $resolveDebugConfigurations(contributionId: string, debugConfiguration: theia.DebugConfiguration, folder: string | undefined): Promise<theia.DebugConfiguration | undefined>;
 }
 
 export interface DebugMain {
     $appendToDebugConsole(value: string): void;
     $appendLineToDebugConsole(value: string): void;
-    $registerDebugConfigurationProvider(debugType: string, providerId: string): void;
-    $unregisterDebugConfigurationProvider(debugType: string, providerId: string): void;
+    $registerDebugConfigurationProvider(contributorId: string, contribution: PluginPackageDebuggersContribution): void;
+    $unregisterDebugConfigurationProvider(contributorId: string): void;
     $addBreakpoints(breakpoints: Breakpoint[]): void;
     $removeBreakpoints(breakpoints: Breakpoint[]): void;
 }

@@ -127,6 +127,15 @@ export class InMemoryResources implements ResourceResolver {
         if (this.resources.has(stringUri)) {
             throw new Error(`Cannot add already existing in-memory resource '${stringUri}'`);
         }
+        return this.doSet(uri, contents);
+    }
+
+    set(uri: URI, contents: string): Resource {
+        return this.doSet(uri, contents);
+    }
+
+    private doSet(uri: URI, contents: string): Resource {
+        const stringUri = uri.toString();
         const resource: Resource = {
             uri,
             async readContents(): Promise<string> {

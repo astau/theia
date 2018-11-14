@@ -89,11 +89,6 @@ export interface DebugService extends Disposable {
      * Stop a running session for the given session id.
      */
     stop(sessionId: string): Promise<void>;
-
-    /**
-     * Stop all running sessions.
-     */
-    stop(): Promise<void>;
 }
 
 /**

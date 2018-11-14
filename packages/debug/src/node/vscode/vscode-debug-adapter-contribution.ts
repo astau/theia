@@ -71,7 +71,7 @@ export namespace VSCodeDebuggerContribution {
 
 // TODO move to @theia/debug
 @injectable()
-export abstract class AbstractVSCodeDebugAdapterContribution implements DebugAdapterContribution {
+export class AbstractVSCodeDebugAdapterContribution implements DebugAdapterContribution {
 
     protected readonly debuggerContribution: Promise<VSCodeDebuggerContribution>;
     readonly label: Promise<string | undefined>;

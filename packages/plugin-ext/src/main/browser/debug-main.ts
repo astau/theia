@@ -21,8 +21,6 @@ import {
     DebugExt,
     MAIN_RPC_CONTEXT
 } from '../../api/plugin-api';
-import { DebugConfigurationProviderRegistry } from '@theia/debug/lib/browser/debug-configuration-provider-registry';
-import { DebugConfigurationProvider } from '@theia/debug/lib/common/debug-configuration-provider';
 import { DebugSessionManager } from '@theia/debug/lib/browser/debug-session-manager';
 import { Breakpoint } from '../../api/model';
 import { LabelProvider } from '@theia/core/lib/browser';
@@ -32,21 +30,24 @@ import { DebugBreakpoint } from '@theia/debug/lib/browser/model/debug-breakpoint
 import URI from 'vscode-uri';
 import { DebugConsoleSession } from '@theia/debug/lib/browser/console/debug-console-session';
 import { SourceBreakpoint } from '@theia/debug/lib/browser/breakpoint/breakpoint-marker';
+import { DebugPluginContributor, DebugContributionManager } from '@theia/debug/lib/browser/debug-contribution-manager';
+import { PluginPackageDebuggersContribution } from '../../common';
+import { DebugConfiguration } from '@theia/debug/lib/common/debug-configuration';
+import { toJSONSchema } from '@theia/debug/lib/common/vscode/vscode-debug-adapter-contribution';
 
 export class DebugMainImpl implements DebugMain {
-    private proxy: DebugExt;
-
-    private readonly configurationProviderRegistry: DebugConfigurationProviderRegistry;
+    private readonly proxy: DebugExt;
     private readonly sessionManager: DebugSessionManager;
     private readonly labelProvider: LabelProvider;
     private readonly editorManager: EditorManager;
     private readonly breakpointsManager: BreakpointManager;
     private readonly debugConsoleSession: DebugConsoleSession;
-    private readonly proxyConfigurationProviders = new Map<string, DebugConfigurationProvider>();
+    private readonly proxyContributors = new Map<string, DebugPluginContributor>();
+    private readonly contributionManager: DebugContributionManager;
 
     constructor(rpc: RPCProtocol, container: interfaces.Container) {
         this.proxy = rpc.getProxy(MAIN_RPC_CONTEXT.DEBUG_EXT);
-        this.configurationProviderRegistry = container.get(DebugConfigurationProviderRegistry);
+        this.contributionManager = container.get(DebugContributionManager);
         this.sessionManager = container.get(DebugSessionManager);
         this.labelProvider = container.get(LabelProvider);
         this.editorManager = container.get(EditorManager);
@@ -77,23 +78,36 @@ export class DebugMainImpl implements DebugMain {
         this.debugConsoleSession.appendLine(value);
     }
 
-    $registerDebugConfigurationProvider(debugType: string, providerId: string): void {
-        const proxyProvider: DebugConfigurationProvider = {
-            provideDebugConfigurations: (folder, token) => this.proxy.$provideDebugConfigurations(providerId, folder),
-            resolveDebugConfiguration: (folder, debugConfiguration, token) => this.proxy.$resolveDebugConfigurations(providerId, folder, debugConfiguration)
+    $registerDebugConfigurationProvider(contributorId: string, contribution: PluginPackageDebuggersContribution): void {
+        const proxyContributor: DebugPluginContributor = {
+            description: {
+                type: contribution.type,
+                label: contribution.label
+            },
+            getSupportedLanguages: () => Promise.resolve(contribution.languages),
+            getSchemaAttributes: () => Promise.resolve(toJSONSchema(contribution.type, contribution.configurationAttributes)),
+            getConfigurationSnippets: () => Promise.resolve(contribution.configurationSnippets),
+
+            provideDebugConfigurations: (workspaceFolderUri: string | undefined) =>
+                this.proxy.$provideDebugConfigurations(contributorId, workspaceFolderUri),
+
+            resolveDebugConfiguration: (config: DebugConfiguration, workspaceFolderUri: string | undefined) =>
+                this.proxy.$resolveDebugConfigurations(contributorId, config, workspaceFolderUri),
+
+            createDebugSession: (config: DebugConfiguration) => Promise.resolve(''),
+            terminateDebugSession: () => Promise.resolve(undefined)
         };
 
-        this.proxyConfigurationProviders.set(providerId, proxyProvider);
-        this.configurationProviderRegistry.registerDebugConfigurationProvider(debugType, proxyProvider);
+        this.proxyContributors.set(contributorId, proxyContributor);
+        this.contributionManager.registerDebugPluginContributor(proxyContributor);
     }
 
-    $unregisterDebugConfigurationProvider(debugType: string, providerId: string): void {
-        const proxyProvider = this.proxyConfigurationProviders.get(providerId);
-        if (proxyProvider) {
-            this.configurationProviderRegistry.unregisterDebugConfigurationProvider(debugType, proxyProvider);
+    $unregisterDebugConfigurationProvider(contributorId: string): void {
+        const contributor = this.proxyContributors.get(contributorId);
+        if (contributor) {
+            this.contributionManager.unregisterDebugPluginContributor(contributor.description.type);
+            this.proxyContributors.delete(contributorId);
         }
-
-        this.proxyConfigurationProviders.delete(providerId);
     }
 
     $addBreakpoints(breakpoints: Breakpoint[]): void {

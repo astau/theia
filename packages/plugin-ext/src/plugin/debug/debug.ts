@@ -23,18 +23,17 @@ import {
     DebugMain,
     DebugExt
 } from '../../api/plugin-api';
-import uuid = require('uuid');
 import * as theia from '@theia/plugin';
+import uuid = require('uuid');
 import { PluginPackageDebuggersContribution } from '../../common/plugin-protocol';
 
 export class DebugExtImpl implements DebugExt {
     readonly activeDebugConsole: theia.DebugConsole;
 
-    private pluginId: string | undefined;
-    private contribution: PluginPackageDebuggersContribution[] = [];
+    private contributions = new Map<string, PluginPackageDebuggersContribution>();
+    private configurationProviders = new Map<string, theia.DebugConfigurationProvider>();
 
     private proxy: DebugMain;
-    private readonly configurationProviders = new Map<string, theia.DebugConfigurationProvider>();
     private _breakpoints: theia.Breakpoint[] = [];
     private _activeDebugSession: theia.DebugSession | undefined;
     private readonly onDidChangeBreakpointsEmitter = new Emitter<theia.BreakpointsChangeEvent>();
@@ -91,23 +90,17 @@ export class DebugExtImpl implements DebugExt {
         return Promise.resolve(true);
     }
 
-    registerDebugConfigurationProvider(debugType: string,
-        provider: theia.DebugConfigurationProvider,
-        pluginId: string,
-        contribution: PluginPackageDebuggersContribution[]): Disposable {
-        this.pluginId = pluginId;
-        this.contribution = contribution;
-        const providerId = uuid.v4.toString();
+    registerDebugConfigurationProvider(provider: theia.DebugConfigurationProvider, contribution: PluginPackageDebuggersContribution): Disposable {
+        const contributionId = uuid.v4();
+        this.contributions.set(contributionId, contribution);
+        this.configurationProviders.set(contributionId, provider);
 
-        console.log(this.pluginId);
-        console.log(JSON.stringify(this.contribution));
-
-        this.configurationProviders.set(providerId, provider);
-        this.proxy.$registerDebugConfigurationProvider(debugType, providerId);
+        this.proxy.$registerDebugConfigurationProvider(contributionId, contribution);
 
         return Disposable.create(() => {
-            this.configurationProviders.delete(providerId);
-            this.proxy.$unregisterDebugConfigurationProvider(debugType, providerId);
+            this.configurationProviders.delete(contributionId);
+            this.contributions.delete(contributionId);
+            this.proxy.$unregisterDebugConfigurationProvider(contributionId);
         });
     }
 
@@ -136,12 +129,12 @@ export class DebugExtImpl implements DebugExt {
         this.onDidChangeBreakpointsEmitter.fire({ added, removed, changed });
     }
 
-    $provideDebugConfigurations(providerId: string, folder: string | undefined): Promise<theia.DebugConfiguration[]> {
+    $provideDebugConfigurations(contributionId: string, folder: string | undefined): Promise<theia.DebugConfiguration[]> {
         const configurations = new Deferred<theia.DebugConfiguration[]>();
 
-        const provider = this.configurationProviders.get(providerId);
-        if (provider && provider.provideDebugConfigurations) {
-            const result = provider.provideDebugConfigurations(undefined);
+        const configurationProvider = this.configurationProviders.get(contributionId);
+        if (configurationProvider && configurationProvider.provideDebugConfigurations) {
+            const result = configurationProvider.provideDebugConfigurations(undefined);
 
             if (result === undefined) {
                 configurations.resolve([]);
@@ -157,15 +150,12 @@ export class DebugExtImpl implements DebugExt {
         return configurations.promise;
     }
 
-    $resolveDebugConfigurations(providerId: string,
-        folder: string | undefined,
-        debugConfiguration: theia.DebugConfiguration): Promise<theia.DebugConfiguration | undefined> {
-
+    $resolveDebugConfigurations(contributionId: string, debugConfiguration: theia.DebugConfiguration, folder: string | undefined): Promise<theia.DebugConfiguration | undefined> {
         const resolvedConfiguration = new Deferred<theia.DebugConfiguration | undefined>();
 
-        const provider = this.configurationProviders.get(providerId);
-        if (provider && provider.resolveDebugConfiguration) {
-            const result = provider.resolveDebugConfiguration(undefined, debugConfiguration);
+        const configurationProvider = this.configurationProviders.get(contributionId);
+        if (configurationProvider && configurationProvider.resolveDebugConfiguration) {
+            const result = configurationProvider.resolveDebugConfiguration(undefined, debugConfiguration);
 
             if (result === undefined) {
                 resolvedConfiguration.resolve(undefined);
