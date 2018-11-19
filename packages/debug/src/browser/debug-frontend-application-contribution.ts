@@ -353,10 +353,6 @@ export class DebugFrontendApplicationContribution extends AbstractViewContributi
             schema = JSON.parse(content) as IJSONSchema;
         } catch (e) {
             schema = { ...launchSchema };
-            this.jsonSchemaStore.registerSchema({
-                fileMatch: ['launch.json'],
-                url: launchSchemaUrl.toString()
-            });
         }
 
         const attributePromises = types.map(type => this.debug.getSchemaAttributes(type));
@@ -385,7 +381,16 @@ export class DebugFrontendApplicationContribution extends AbstractViewContributi
             }
         }
         items.defaultSnippets!.push(...await this.debug.getConfigurationSnippets());
-        this.inmemoryResources.set(launchSchemaUrl, JSON.stringify(schema));
+        try {
+            await this.inmemoryResources.resolve(launchSchemaUrl);
+            this.inmemoryResources.update(launchSchemaUrl, JSON.stringify(schema));
+        } catch (e) {
+            this.inmemoryResources.add(launchSchemaUrl, JSON.stringify(schema));
+            this.jsonSchemaStore.registerSchema({
+                fileMatch: ['launch.json'],
+                url: launchSchemaUrl.toString()
+            });
+        }
     }
 
     onStop(): void {
