@@ -113,7 +113,10 @@ export class DebugContributionManager {
         let snippets = await this.debugService.getConfigurationSnippets();
 
         for (const contributor of this.pluginContributors.values()) {
-            snippets = snippets.concat(await contributor.getConfigurationSnippets());
+            const contribSnippets = await contributor.getConfigurationSnippets();
+            if (contribSnippets) {
+                snippets = snippets.concat(contribSnippets);
+            }
         }
 
         return snippets;

@@ -117,7 +117,7 @@ export class DefaultResourceProvider {
 
 }
 
-export class InMemoryMutableResource implements Resource {
+export class MutableResource implements Resource {
     readonly uri: URI;
     private contents: string;
     private _dispose: () => void;
@@ -151,7 +151,7 @@ export class InMemoryMutableResource implements Resource {
 @injectable()
 export class InMemoryResources implements ResourceResolver {
 
-    private resources = new Map<string, InMemoryMutableResource>();
+    private resources = new Map<string, MutableResource>();
 
     add(uri: URI, contents: string): Resource {
         const resourceUri = uri.toString();
@@ -159,7 +159,7 @@ export class InMemoryResources implements ResourceResolver {
             throw new Error(`Cannot add already existing in-memory resource '${resourceUri}'`);
         }
 
-        const resource = new InMemoryMutableResource(uri, contents, () => this.resources.delete(resourceUri));
+        const resource = new MutableResource(uri, contents, () => this.resources.delete(resourceUri));
         this.resources.set(resourceUri, resource);
         return resource;
     }

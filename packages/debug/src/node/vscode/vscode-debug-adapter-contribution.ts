@@ -20,6 +20,7 @@ import { injectable, unmanaged } from 'inversify';
 import { DebugAdapterContribution, DebugAdapterExecutable } from '../debug-model';
 import { isWindows, isOSX } from '@theia/core/lib/common/os';
 import { IJSONSchema, IJSONSchemaSnippet } from '@theia/core/lib/common/json-schema';
+import { deepClone } from '@theia/core/lib/common/objects';
 
 namespace nls {
     export function localize(key: string, _default: string) {
@@ -117,7 +118,7 @@ export class AbstractVSCodeDebugAdapterContribution implements DebugAdapterContr
         const taskSchema = {}; // TODO
         const { configurationAttributes } = debuggerContribution;
         return Object.keys(configurationAttributes).map(request => {
-            const attributes: IJSONSchema = configurationAttributes[request];
+            const attributes: IJSONSchema = deepClone(configurationAttributes[request]);
             const defaultRequired = ['name', 'type', 'request'];
             attributes.required = attributes.required && attributes.required.length ? defaultRequired.concat(attributes.required) : defaultRequired;
             attributes.additionalProperties = false;

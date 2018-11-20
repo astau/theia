@@ -18,7 +18,7 @@ import { AbstractViewContribution, ApplicationShell, KeybindingRegistry } from '
 import { injectable, inject } from 'inversify';
 import { JsonSchemaStore } from '@theia/core/lib/browser/json-schema-store';
 import { ThemeService } from '@theia/core/lib/browser/theming';
-import { InMemoryResources, MenuModelRegistry, CommandRegistry, MAIN_MENU_BAR, Command } from '@theia/core/lib/common';
+import { InMemoryResources, MenuModelRegistry, CommandRegistry, MAIN_MENU_BAR, Command, deepClone } from '@theia/core/lib/common';
 import { DebugViewLocation } from '../common/debug-configuration';
 import { IJSONSchema } from '@theia/core/lib/common/json-schema';
 import { EditorKeybindingContexts } from '@theia/editor/lib/browser';
@@ -336,27 +336,22 @@ export class DebugFrontendApplicationContribution extends AbstractViewContributi
                 this.openSession(session);
             }
         });
-        this.debug.onDidContributionAdd(type => this.doAddDebugTypes([type]));
-        this.debug.debugTypes().then(async types => this.doAddDebugTypes(types));
+        this.debug.debugTypes().then(async () => this.doUpdateDebugTypes());
+        this.debug.onDidContributionAdd(async () => this.doUpdateDebugTypes());
+        this.debug.onDidContributionDelete(async () => this.doUpdateDebugTypes());
 
         this.configurations.load();
         await this.breakpointManager.load();
     }
 
-    private async doAddDebugTypes(types: string[]): Promise<void> {
-        const launchSchemaUrl = new URI('vscode://debug/launch.json');
+    private async doUpdateDebugTypes(): Promise<void> {
+        const types = await this.debug.debugTypes();
 
-        let schema: IJSONSchema;
-        try {
-            const resource = await this.inmemoryResources.resolve(launchSchemaUrl);
-            const content = await resource.readContents();
-            schema = JSON.parse(content) as IJSONSchema;
-        } catch (e) {
-            schema = { ...launchSchema };
-        }
+        const launchSchemaUrl = new URI('vscode://debug/launch.json');
+        const schema = { ...deepClone(launchSchema) };
+        const items = (<IJSONSchema>schema!.properties!['configurations'].items);
 
         const attributePromises = types.map(type => this.debug.getSchemaAttributes(type));
-        const items = (<IJSONSchema>launchSchema!.properties!['configurations'].items);
         for (const attributes of await Promise.all(attributePromises)) {
             for (const attribute of attributes) {
                 attribute.properties = {
@@ -381,11 +376,12 @@ export class DebugFrontendApplicationContribution extends AbstractViewContributi
             }
         }
         items.defaultSnippets!.push(...await this.debug.getConfigurationSnippets());
+
+        const contents = JSON.stringify(schema);
         try {
-            await this.inmemoryResources.resolve(launchSchemaUrl);
-            this.inmemoryResources.update(launchSchemaUrl, JSON.stringify(schema));
+            await this.inmemoryResources.update(launchSchemaUrl, contents);
         } catch (e) {
-            this.inmemoryResources.add(launchSchemaUrl, JSON.stringify(schema));
+            this.inmemoryResources.add(launchSchemaUrl, contents);
             this.jsonSchemaStore.registerSchema({
                 fileMatch: ['launch.json'],
                 url: launchSchemaUrl.toString()
