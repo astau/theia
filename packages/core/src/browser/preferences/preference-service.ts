@@ -84,8 +84,6 @@ export class PreferenceServiceImpl implements PreferenceService, FrontendApplica
     @postConstruct()
     protected init(): void {
         this.toDispose.push(Disposable.create(() => this._ready.reject()));
-        this.providers.push(this.schema);
-        this.preferences = this.parsePreferences();
     }
 
     dispose(): void {
@@ -98,6 +96,9 @@ export class PreferenceServiceImpl implements PreferenceService, FrontendApplica
     }
 
     initialize(): void {
+        this.schema.initialize();
+        this.providers.push(this.schema);
+        this.preferences = this.parsePreferences();
         this.initializeProviders();
     }
     protected async initializeProviders(): Promise<void> {

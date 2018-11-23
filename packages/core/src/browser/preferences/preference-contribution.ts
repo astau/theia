@@ -66,11 +66,10 @@ export class PreferenceSchemaProvider extends PreferenceProvider {
     protected readonly preferences: { [name: string]: any } = {};
     protected validateFunction: Ajv.ValidateFunction;
 
-    constructor(
-        @inject(ContributionProvider) @named(PreferenceContribution)
-        protected readonly preferenceContributions: ContributionProvider<PreferenceContribution>
-    ) {
-        super();
+    @inject(ContributionProvider) @named(PreferenceContribution)
+    protected readonly preferenceContributions: ContributionProvider<PreferenceContribution>;
+
+    initialize(): void {
         this.preferenceContributions.getContributions().forEach(contrib => {
             this.doSetSchema(contrib.schema);
         });
