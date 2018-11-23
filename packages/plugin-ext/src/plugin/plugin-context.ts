@@ -91,13 +91,16 @@ import { DialogsExtImpl } from './dialogs';
 import { CancellationToken } from '@theia/core/lib/common/cancellation';
 import { MarkdownString } from './markdown-string';
 import { TreeViewsExtImpl } from './tree/tree-views';
-import { DebugExtImpl } from './debug/debug';
+import { DebugExtImpl } from './node/debug';
 
 export function createAPIFactory(
     rpc: RPCProtocol,
     pluginManager: PluginManager,
     envExt: EnvExtImpl,
+    debugExt: DebugExtImpl,
     preferenceRegistryExt: PreferenceRegistryExtImpl): PluginAPIFactory {
+
+    rpc.set(MAIN_RPC_CONTEXT.DEBUG_EXT, debugExt);
 
     const commandRegistry = rpc.set(MAIN_RPC_CONTEXT.COMMAND_REGISTRY_EXT, new CommandRegistryImpl(rpc));
     const quickOpenExt = rpc.set(MAIN_RPC_CONTEXT.QUICK_OPEN_EXT, new QuickOpenExtImpl(rpc));
@@ -113,7 +116,6 @@ export function createAPIFactory(
     const outputChannelRegistryExt = new OutputChannelRegistryExt(rpc);
     const languagesExt = rpc.set(MAIN_RPC_CONTEXT.LANGUAGES_EXT, new LanguagesExtImpl(rpc, documents, commandRegistry));
     const treeViewsExt = rpc.set(MAIN_RPC_CONTEXT.TREE_VIEWS_EXT, new TreeViewsExtImpl(rpc, commandRegistry));
-    const debugExt = rpc.set(MAIN_RPC_CONTEXT.DEBUG_EXT, new DebugExtImpl(rpc));
 
     return function (plugin: InternalPlugin): typeof theia {
         const commands: typeof theia.commands = {
@@ -428,14 +430,7 @@ export function createAPIFactory(
                 return debugExt.onDidChangeBreakpoints;
             },
             registerDebugConfigurationProvider(debugType: string, provider: theia.DebugConfigurationProvider): Disposable {
-                const contributions = plugin.rawModel.contributes && plugin.rawModel.contributes.debuggers || [];
-                const contribution = contributions.filter(c => c.type === debugType)[0];
-
-                if (contribution) {
-                    return debugExt.registerDebugConfigurationProvider(provider, contribution);
-                } else {
-                    return Disposable.create(() => { });
-                }
+                return debugExt.registerDebugConfigurationProvider(debugType, provider, plugin.pluginPath);
             },
             startDebugging(folder: theia.WorkspaceFolder | undefined, nameOrConfiguration: string | theia.DebugConfiguration): Thenable<boolean> {
                 return debugExt.startDebugging(folder, nameOrConfiguration);

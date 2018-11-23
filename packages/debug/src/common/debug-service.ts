@@ -83,12 +83,12 @@ export interface DebugService extends Disposable {
      * @param config The resolved [debug configuration](#DebugConfiguration).
      * @returns The identifier of the created [debug adapter session](#DebugAdapterSession).
      */
-    create(config: DebugConfiguration): Promise<string>;
+    createDebugSession(config: DebugConfiguration): Promise<string>;
 
     /**
      * Stop a running session for the given session id.
      */
-    stop(sessionId: string): Promise<void>;
+    terminateDebugSession(sessionId: string): Promise<void>;
 }
 
 /**

@@ -18,7 +18,7 @@
 
 import { createProxyIdentifier, ProxyIdentifier } from './rpc-protocol';
 import * as theia from '@theia/plugin';
-import { PluginLifecycle, PluginModel, PluginMetadata, PluginPackage, PluginPackageDebuggersContribution } from '../common/plugin-protocol';
+import { PluginLifecycle, PluginModel, PluginMetadata, PluginPackage } from '../common/plugin-protocol';
 import { QueryParameters } from '../common/env';
 import { TextEditorCursorStyle } from '../common/editor-options';
 import { TextEditorLineNumbersStyle, EndOfLine, OverviewRulerLane, IndentAction, FileOperationOptions } from '../plugin/types-impl';
@@ -47,6 +47,8 @@ import {
     Location,
     Breakpoint
 } from './model';
+import { IJSONSchema, IJSONSchemaSnippet } from '@theia/core/lib/common/json-schema';
+import { DebuggerDescription } from '@theia/debug/lib/common/debug-service';
 
 export interface PluginInitData {
     plugins: PluginMetadata[];
@@ -783,15 +785,19 @@ export interface DebugExt {
     $sessionDidChange(sessionId: string | undefined, debugConfiguration?: theia.DebugConfiguration): void;
     $provideDebugConfigurations(contributionId: string, folder: string | undefined): Promise<theia.DebugConfiguration[]>;
     $resolveDebugConfigurations(contributionId: string, debugConfiguration: theia.DebugConfiguration, folder: string | undefined): Promise<theia.DebugConfiguration | undefined>;
+    $getSupportedLanguages(contributionId: string): Promise<string[]>;
+    $getSchemaAttributes(contributionId: string): Promise<IJSONSchema[]>;
+    $getConfigurationSnippets(contributionId: string): Promise<IJSONSchemaSnippet[]>;
+    $getDebuggerDescription(contributionId: string): Promise<DebuggerDescription>;
 }
 
 export interface DebugMain {
-    $appendToDebugConsole(value: string): void;
-    $appendLineToDebugConsole(value: string): void;
-    $registerDebugConfigurationProvider(contributorId: string, contribution: PluginPackageDebuggersContribution): void;
-    $unregisterDebugConfigurationProvider(contributorId: string): void;
-    $addBreakpoints(breakpoints: Breakpoint[]): void;
-    $removeBreakpoints(breakpoints: Breakpoint[]): void;
+    $appendToDebugConsole(value: string): Promise<void>;
+    $appendLineToDebugConsole(value: string): Promise<void>;
+    $registerDebugConfigurationProvider(contributorId: string, debugType: string): Promise<void>;
+    $unregisterDebugConfigurationProvider(contributorId: string): Promise<void>;
+    $addBreakpoints(breakpoints: Breakpoint[]): Promise<void>;
+    $removeBreakpoints(breakpoints: Breakpoint[]): Promise<void>;
 }
 
 export const PLUGIN_RPC_CONTEXT = {

@@ -48,7 +48,7 @@ export class DebugContributionManager {
 
     async registerDebugPluginContributor(contributor: DebugPluginContributor): Promise<Disposable> {
         const type = contributor.description.type;
-        if (await this.isRegistered(type)) {
+        if (await this.isContributorRegistered(type)) {
             console.warn(`Debugger with type '${type}' already registered.`);
             return Disposable.NULL;
         }
@@ -127,7 +127,7 @@ export class DebugContributionManager {
         if (contributor) {
             return contributor.createDebugSession(config);
         } else {
-            return this.debugService.create(config);
+            return this.debugService.createDebugSession(config);
         }
     }
 
@@ -136,11 +136,11 @@ export class DebugContributionManager {
         if (contributor) {
             return contributor.terminateDebugSession();
         } else {
-            return this.debugService.stop(sessionId);
+            return this.debugService.terminateDebugSession(sessionId);
         }
     }
 
-    private async isRegistered(debugType: string): Promise<boolean> {
+    private async isContributorRegistered(debugType: string): Promise<boolean> {
         const registeredTypes = await this.debugTypes();
         return registeredTypes.indexOf(debugType) !== -1;
     }
@@ -148,18 +148,11 @@ export class DebugContributionManager {
 
 export interface DebugPluginContributor {
     description: DebuggerDescription;
-
     getSupportedLanguages(): Promise<string[]>;
-
     getSchemaAttributes(): Promise<IJSONSchema[]>;
-
     getConfigurationSnippets(): Promise<IJSONSchemaSnippet[]>;
-
     provideDebugConfigurations(workspaceFolderUri: string | undefined): Promise<DebugConfiguration[]>;
-
     resolveDebugConfiguration(config: DebugConfiguration, workspaceFolderUri: string | undefined): Promise<DebugConfiguration | undefined>;
-
     createDebugSession(config: DebugConfiguration): Promise<string>;
-
     terminateDebugSession(): Promise<void>;
 }

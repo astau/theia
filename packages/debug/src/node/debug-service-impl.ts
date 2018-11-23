@@ -257,7 +257,7 @@ export class DebugServiceImpl implements DebugService, MessagingService.Contribu
     protected readonly registry: DebugAdapterContributionRegistry;
 
     dispose(): void {
-        this.stop();
+        this.terminateDebugSession();
     }
 
     configure(service: MessagingService): void {
@@ -267,7 +267,7 @@ export class DebugServiceImpl implements DebugService, MessagingService.Contribu
                 channel.close();
                 return;
             }
-            channel.onClose(() => this.stop(id));
+            channel.onClose(() => this.terminateDebugSession(id));
             session.start(channel);
         });
     }
@@ -295,12 +295,12 @@ export class DebugServiceImpl implements DebugService, MessagingService.Contribu
         return this.registry.resolveDebugConfiguration(config, workspaceFolderUri);
     }
 
-    async create(config: DebugConfiguration): Promise<string> {
+    async createDebugSession(config: DebugConfiguration): Promise<string> {
         const session = await this.sessionManager.create(config);
         return session.id;
     }
 
-    async stop(sessionId?: string): Promise<void> {
+    async terminateDebugSession(sessionId?: string): Promise<void> {
         if (sessionId) {
             const debugSession = this.sessionManager.find(sessionId);
             if (debugSession) {

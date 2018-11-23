@@ -31,9 +31,7 @@ import URI from 'vscode-uri';
 import { DebugConsoleSession } from '@theia/debug/lib/browser/console/debug-console-session';
 import { SourceBreakpoint } from '@theia/debug/lib/browser/breakpoint/breakpoint-marker';
 import { DebugPluginContributor, DebugContributionManager } from '@theia/debug/lib/browser/debug-contribution-manager';
-import { PluginPackageDebuggersContribution } from '../../common';
 import { DebugConfiguration } from '@theia/debug/lib/common/debug-configuration';
-import { toJSONSchema } from '@theia/debug/lib/common/vscode/vscode-debug-adapter-contribution';
 
 export class DebugMainImpl implements DebugMain {
     private readonly proxy: DebugExt;
@@ -70,30 +68,28 @@ export class DebugMainImpl implements DebugMain {
         });
     }
 
-    $appendToDebugConsole(value: string): void {
+    async $appendToDebugConsole(value: string): Promise<void> {
         this.debugConsoleSession.append(value);
     }
 
-    $appendLineToDebugConsole(value: string): void {
+    async $appendLineToDebugConsole(value: string): Promise<void> {
         this.debugConsoleSession.appendLine(value);
     }
 
-    $registerDebugConfigurationProvider(contributorId: string, contribution: PluginPackageDebuggersContribution): void {
+    async $registerDebugConfigurationProvider(contributorId: string, debugType: string): Promise<void> {
+        const description = await this.proxy.$getDebuggerDescription(contributorId);
+
         const proxyContributor: DebugPluginContributor = {
-            description: {
-                type: contribution.type,
-                label: contribution.label
-            },
-            getSupportedLanguages: () => Promise.resolve(contribution.languages),
-            getSchemaAttributes: () => Promise.resolve(toJSONSchema(contribution.type, contribution.configurationAttributes)),
-            getConfigurationSnippets: () => Promise.resolve(contribution.configurationSnippets),
+            description,
 
             provideDebugConfigurations: (workspaceFolderUri: string | undefined) =>
                 this.proxy.$provideDebugConfigurations(contributorId, workspaceFolderUri),
-
             resolveDebugConfiguration: (config: DebugConfiguration, workspaceFolderUri: string | undefined) =>
                 this.proxy.$resolveDebugConfigurations(contributorId, config, workspaceFolderUri),
 
+            getSupportedLanguages: () => this.proxy.$getSupportedLanguages(contributorId),
+            getSchemaAttributes: () => this.proxy.$getSchemaAttributes(contributorId),
+            getConfigurationSnippets: () => this.proxy.$getConfigurationSnippets(contributorId),
             createDebugSession: (config: DebugConfiguration) => Promise.resolve(''),
             terminateDebugSession: () => Promise.resolve(undefined)
         };
@@ -102,7 +98,7 @@ export class DebugMainImpl implements DebugMain {
         this.contributionManager.registerDebugPluginContributor(proxyContributor);
     }
 
-    $unregisterDebugConfigurationProvider(contributorId: string): void {
+    async $unregisterDebugConfigurationProvider(contributorId: string): Promise<void> {
         const contributor = this.proxyContributors.get(contributorId);
         if (contributor) {
             this.contributionManager.unregisterDebugPluginContributor(contributor.description.type);
@@ -110,11 +106,11 @@ export class DebugMainImpl implements DebugMain {
         }
     }
 
-    $addBreakpoints(breakpoints: Breakpoint[]): void {
+    async $addBreakpoints(breakpoints: Breakpoint[]): Promise<void> {
         this.sessionManager.addBreakpoints(this.toInternalBreakpoints(breakpoints));
     }
 
-    $removeBreakpoints(breakpoints: Breakpoint[]): void {
+    async $removeBreakpoints(breakpoints: Breakpoint[]): Promise<void> {
         this.sessionManager.removeBreakpoints(this.toInternalBreakpoints(breakpoints));
     }
 
