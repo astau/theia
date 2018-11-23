@@ -16,11 +16,11 @@
 
 import { injectable, inject, named } from 'inversify';
 import { ContributionProvider, CommandContribution, CommandRegistry } from '@theia/core/lib/common';
-import { FrontendApplication, FrontendApplicationContribution } from '@theia/core/lib/browser';
+import { FrontendApplication, FrontendApplicationContribution, PreferenceContribution, PreferenceSchema } from '@theia/core/lib/browser';
 import { LanguageClientContribution } from './language-client-contribution';
 
 @injectable()
-export class LanguagesFrontendContribution implements FrontendApplicationContribution, CommandContribution {
+export class LanguagesFrontendContribution implements FrontendApplicationContribution, CommandContribution, PreferenceContribution {
 
     @inject(FrontendApplication)
     protected readonly app: FrontendApplication;
@@ -65,4 +65,25 @@ export class LanguagesFrontendContribution implements FrontendApplicationContrib
         }
     }
 
+    get schema(): PreferenceSchema {
+        const schema: PreferenceSchema = {
+            type: 'object',
+            properties: {},
+        };
+
+        for (const contribution of this.contributions.getContributions()) {
+            schema.properties[`${contribution.id}.trace.server`] = {
+                type: 'string',
+                enum: [
+                    'off',
+                    'messages',
+                    'verbose'
+                ],
+                default: 'off',
+                description: `Enable/disable tracing communications with the ${contribution.name} language server`,
+            };
+        }
+
+        return schema;
+    }
 }
