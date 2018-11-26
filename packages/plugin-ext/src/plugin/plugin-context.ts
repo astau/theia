@@ -430,7 +430,7 @@ export function createAPIFactory(
                 return debugExt.onDidChangeBreakpoints;
             },
             registerDebugConfigurationProvider(debugType: string, provider: theia.DebugConfigurationProvider): Disposable {
-                return debugExt.registerDebugConfigurationProvider(debugType, provider, plugin.pluginPath);
+                return debugExt.registerDebugConfigurationProvider(debugType, provider, plugin.pluginFolder);
             },
             startDebugging(folder: theia.WorkspaceFolder | undefined, nameOrConfiguration: string | theia.DebugConfiguration): Thenable<boolean> {
                 return debugExt.startDebugging(folder, nameOrConfiguration);

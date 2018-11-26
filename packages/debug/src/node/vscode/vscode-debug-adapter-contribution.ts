@@ -16,8 +16,7 @@
 
 import * as fs from 'fs-extra';
 import * as path from 'path';
-import { injectable, unmanaged } from 'inversify';
-import { DebugAdapterContribution, DebugAdapterExecutable } from '../debug-model';
+import { DebugAdapterExecutable, DebugAdapterContribution } from '../debug-model';
 import { isWindows, isOSX } from '@theia/core/lib/common/os';
 import { IJSONSchema, IJSONSchemaSnippet } from '@theia/core/lib/common/json-schema';
 import { deepClone } from '@theia/core/lib/common/objects';
@@ -71,23 +70,21 @@ export namespace VSCodeDebuggerContribution {
 }
 
 // TODO move to @theia/debug
-@injectable()
-export abstract class AbstractVSCodeDebugAdapterContribution implements DebugAdapterContribution {
+export class VSCodeDebugAdapterContribution implements DebugAdapterContribution {
 
     protected readonly debuggerContribution: Promise<VSCodeDebuggerContribution>;
     readonly label: Promise<string | undefined>;
     readonly languages: Promise<string[] | undefined>;
 
-    constructor(
-        @unmanaged() readonly type: string,
-        @unmanaged() readonly extensionPath: string
-    ) {
+    constructor(readonly type: string, readonly extensionPath: string) {
         this.debuggerContribution = this.parse();
         this.label = this.debuggerContribution.then(({ label }) => label);
         this.languages = this.debuggerContribution.then(({ languages }) => languages);
     }
+
     protected async parse(): Promise<VSCodeDebuggerContribution> {
-        const nlsMap = require(path.join(this.extensionPath, 'package.nls.json'));
+        const nlsFile = path.join(this.extensionPath, 'package.nls.json');
+        const nlsMap = fs.existsSync(nlsFile) ? require(nlsFile) : [];
         const pckPath = path.join(this.extensionPath, 'package.json');
         let text = (await fs.readFile(pckPath)).toString();
         for (const key of Object.keys(nlsMap)) {

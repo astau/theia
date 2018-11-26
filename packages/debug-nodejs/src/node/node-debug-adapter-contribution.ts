@@ -20,7 +20,7 @@ import { injectable } from 'inversify';
 // tslint:disable-next-line:no-implicit-dependencies
 import { FileUri } from '@theia/core/lib/node';
 import { DebugConfiguration } from '@theia/debug/lib/common/debug-configuration';
-import { AbstractVSCodeDebugAdapterContribution } from '@theia/debug/lib/node/vscode/vscode-debug-adapter-contribution';
+import { AbstractVSCodeDebugAdapterContribution } from '@theia/debug/lib/node/vscode/injectable-vscode-debug-adapter-contribution';
 
 export const INSPECTOR_PORT_DEFAULT = 9229;
 export const LEGACY_PORT_DEFAULT = 5858;

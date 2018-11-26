@@ -24,7 +24,7 @@ import {
 } from '../../api/plugin-api';
 import * as theia from '@theia/plugin';
 import uuid = require('uuid');
-import { AbstractVSCodeDebugAdapterContribution } from '@theia/debug/lib/node/vscode/vscode-debug-adapter-contribution';
+import { VSCodeDebugAdapterContribution } from '@theia/debug/lib/node/vscode/vscode-debug-adapter-contribution';
 import { DebugAdapterContribution } from '@theia/debug/lib/node/debug-model';
 import { IJSONSchema, IJSONSchemaSnippet } from '@theia/core/lib/common/json-schema';
 import { DebuggerDescription } from '@theia/debug/lib/common/debug-service';
@@ -207,7 +207,7 @@ export class DebugExtImpl implements DebugExt {
     }
 }
 
-class DebugPluginContribution extends AbstractVSCodeDebugAdapterContribution {
+class DebugPluginContribution extends VSCodeDebugAdapterContribution {
     protected readonly provider: theia.DebugConfigurationProvider;
 
     constructor(debugType: string, provider: theia.DebugConfigurationProvider, pluginPath: string) {
