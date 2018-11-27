@@ -15,7 +15,7 @@
  ********************************************************************************/
 
 import * as Ajv from 'ajv';
-import { inject, injectable, named, interfaces } from 'inversify';
+import { inject, injectable, named, interfaces, postConstruct } from 'inversify';
 import { ContributionProvider, bindContributionProvider } from '../../common';
 import { PreferenceProvider } from './preference-provider';
 
@@ -69,7 +69,8 @@ export class PreferenceSchemaProvider extends PreferenceProvider {
     @inject(ContributionProvider) @named(PreferenceContribution)
     protected readonly preferenceContributions: ContributionProvider<PreferenceContribution>;
 
-    initialize(): void {
+    @postConstruct()
+    protected init(): void {
         this.preferenceContributions.getContributions().forEach(contrib => {
             this.doSetSchema(contrib.schema);
         });
@@ -112,6 +113,7 @@ export class PreferenceSchemaProvider extends PreferenceProvider {
     setSchema(schema: PreferenceSchema): void {
         this.doSetSchema(schema);
         this.updateValidate();
+        this.fireOnDidPreferencesChanged();
     }
 
     async setPreference(): Promise<void> {

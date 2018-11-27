@@ -16,7 +16,7 @@
 
 import { ContainerModule } from 'inversify';
 import { bindContributionProvider, CommandContribution } from '@theia/core/lib/common';
-import { FrontendApplicationContribution, KeybindingContribution, QuickOpenContribution, PreferenceContribution } from '@theia/core/lib/browser';
+import { FrontendApplicationContribution, KeybindingContribution, QuickOpenContribution } from '@theia/core/lib/browser';
 import { Window } from './language-client-services';
 import { WindowImpl } from './window-impl';
 import { LanguageClientFactory } from './language-client-factory';
@@ -35,7 +35,6 @@ export default new ContainerModule(bind => {
     bind(LanguagesFrontendContribution).toSelf().inSingletonScope();
     bind(FrontendApplicationContribution).toService(LanguagesFrontendContribution);
     bind(CommandContribution).toService(LanguagesFrontendContribution);
-    bind(PreferenceContribution).toService(LanguagesFrontendContribution);
 
     bind(WorkspaceSymbolCommand).toSelf().inSingletonScope();
     for (const identifier of [CommandContribution, KeybindingContribution, QuickOpenContribution]) {
