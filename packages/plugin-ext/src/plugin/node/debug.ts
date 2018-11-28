@@ -24,17 +24,28 @@ import {
 } from '../../api/plugin-api';
 import * as theia from '@theia/plugin';
 import uuid = require('uuid');
-import { VSCodeDebugAdapterContribution } from '@theia/debug/lib/node/vscode/vscode-debug-adapter-contribution';
-import { DebugAdapterContribution } from '@theia/debug/lib/node/debug-model';
+import { DebugAdapterContribution, DebugAdapterExecutable, CommunicationProvider } from '@theia/debug/lib/node/debug-model';
 import { IJSONSchema, IJSONSchemaSnippet } from '@theia/core/lib/common/json-schema';
 import { DebuggerDescription } from '@theia/debug/lib/common/debug-service';
 import { DebugConfiguration } from '@theia/debug/lib/common/debug-configuration';
-
+import { VSCodeDebugAdapterContribution } from '@theia/debug/lib/node/vscode/vscode-debug-adapter-contribution';
+import { DebugProtocol } from 'vscode-debugprotocol';
+import { PluginPackageDebuggersContribution } from '../../common';
+import { DebugAdapterSessionImpl } from '@theia/debug/lib/node/debug-adapter-session';
+import { DisposableCollection } from '@theia/core/lib/common/disposable';
+import { IWebSocket } from 'vscode-ws-jsonrpc';
+import { ChildProcess, spawn } from 'child_process';
 /**
  * It is supposed to work at node.
  */
 export class DebugExtImpl implements DebugExt {
+    // debug sessions by sessionId
+    private debugSessions = new Map<string, PluginDebugSession>();
+    private disposables = new Map<string, DisposableCollection>();
+
+    // contributions by contributorId
     private debugAdapterContributions = new Map<string, DebugAdapterContribution>();
+    private packageContributions = new Map<string, PluginPackageDebuggersContribution>();
 
     private proxy: DebugMain;
     private _breakpoints: theia.Breakpoint[] = [];
@@ -96,42 +107,96 @@ export class DebugExtImpl implements DebugExt {
         return Promise.resolve(true);
     }
 
-    registerDebugConfigurationProvider(debugType: string, provider: theia.DebugConfigurationProvider, pluginPath: string): Disposable {
+    registerDebugConfigurationProvider(
+        debugType: string,
+        provider: theia.DebugConfigurationProvider,
+        packageContribution: PluginPackageDebuggersContribution,
+        pluginPath: string): Disposable {
+
         const contributionId = uuid.v4();
         const pluginContribution = new DebugPluginContribution(debugType, provider, pluginPath);
         this.debugAdapterContributions.set(contributionId, pluginContribution);
+        this.packageContributions.set(contributionId, packageContribution);
 
         this.proxy.$registerDebugConfigurationProvider(contributionId, debugType);
 
         return Disposable.create(() => {
             this.debugAdapterContributions.delete(contributionId);
+            this.packageContributions.delete(contributionId);
             this.proxy.$unregisterDebugConfigurationProvider(contributionId);
         });
     }
 
-    $onSessionCustomEvent(sessionId: string, debugConfiguration: theia.DebugConfiguration, event: string, body?: any): void {
-        this.onDidReceiveDebugSessionCustomEmitter.fire({
-            event, body,
-            session: this.makeProxySession(sessionId, debugConfiguration)
-        });
+    $onSessionCustomEvent(sessionId: string, event: string, body?: any): void {
+        const session = this.debugSessions.get(sessionId);
+        if (session) {
+            this.onDidReceiveDebugSessionCustomEmitter.fire({ event, body, session });
+        }
     }
 
-    $sessionDidCreate(sessionId: string, debugConfiguration: theia.DebugConfiguration): void {
-        this.onDidStartDebugSessionEmitter.fire(this.makeProxySession(sessionId, debugConfiguration));
+    $sessionDidCreate(sessionId: string): void {
+        const session = this.debugSessions.get(sessionId);
+        if (session) {
+            this.onDidStartDebugSessionEmitter.fire(session);
+        }
     }
 
-    $sessionDidDestroy(sessionId: string, debugConfiguration: theia.DebugConfiguration): void {
-        this.onDidTerminateDebugSessionEmitter.fire(this.makeProxySession(sessionId, debugConfiguration));
+    $sessionDidDestroy(sessionId: string): void {
+        const session = this.debugSessions.get(sessionId);
+        if (session) {
+            this.onDidTerminateDebugSessionEmitter.fire(session);
+        }
     }
 
-    $sessionDidChange(sessionId: string | undefined, debugConfiguration?: theia.DebugConfiguration): void {
-        this._activeDebugSession = sessionId ? this.makeProxySession(sessionId, debugConfiguration!) : undefined;
-        this.onDidChangeActiveDebugSessionEmitter.fire(this._activeDebugSession);
+    $sessionDidChange(sessionId: string | undefined): void {
+        const session = sessionId && this.debugSessions.get(sessionId);
+        if (session) {
+            this.onDidChangeActiveDebugSessionEmitter.fire(session);
+        } else {
+            this.onDidChangeActiveDebugSessionEmitter.fire(undefined);
+        }
     }
 
     $breakpointsDidChange(all: Breakpoint[], added: Breakpoint[], removed: Breakpoint[], changed: Breakpoint[]): void {
         this._breakpoints = all;
         this.onDidChangeBreakpointsEmitter.fire({ added, removed, changed });
+    }
+
+    async $createDebugSession(contributionId: string, debugConfiguration: theia.DebugConfiguration): Promise<string> {
+        const adapterContribution = this.debugAdapterContributions.get(contributionId);
+        if (adapterContribution) {
+            const packageContribution = this.packageContributions.get(contributionId);
+
+            let executable: DebugAdapterExecutable;
+            if (packageContribution && packageContribution.adapterExecutableCommand !== undefined) {
+                executable = await this.proxy.$executeCommand(packageContribution.adapterExecutableCommand);
+            } else if (adapterContribution.provideDebugAdapterExecutable) {
+                executable = await adapterContribution.provideDebugAdapterExecutable(debugConfiguration);
+            } else {
+                throw new Error('It is not possible to provide DebugAdapterExecutable');
+            }
+
+            const communicationProvider = startDebugAdapter(executable);
+
+            const sessionId = uuid.v4();
+            const session = new PluginDebugSession(sessionId, debugConfiguration, communicationProvider);
+            this.debugSessions.set(sessionId, session);
+
+            const disposable = session.onDidReceiveDebugSessionCustomEvent(event => this.onDidReceiveDebugSessionCustomEmitter.fire(event));
+            this.disposables.set(sessionId, new DisposableCollection(disposable));
+        }
+
+        throw new Error('Debug adapter contribution not found');
+    }
+
+    async $terminateDebugSession(sessionId: string): Promise<void> {
+        const debugAdapterSession = this.debugSessions.get(sessionId);
+        if (debugAdapterSession) {
+            this.debugSessions.delete(sessionId);
+            this.disposables.get(sessionId)!.dispose();
+            this.disposables.delete(sessionId);
+            return debugAdapterSession.stop();
+        }
     }
 
     async $getDebuggerDescription(contributionId: string): Promise<DebuggerDescription> {
@@ -196,15 +261,6 @@ export class DebugExtImpl implements DebugExt {
 
         return undefined;
     }
-
-    private makeProxySession(sessionId: string, configuration: theia.DebugConfiguration): theia.DebugSession {
-        return {
-            id: sessionId,
-            type: configuration.type,
-            name: configuration.name,
-            customRequest: (command: string, args?: any): Thenable<any> => Promise.resolve()
-        };
-    }
 }
 
 class DebugPluginContribution extends VSCodeDebugAdapterContribution {
@@ -235,4 +291,63 @@ class DebugPluginContribution extends VSCodeDebugAdapterContribution {
 
         return undefined;
     }
+}
+
+class PluginDebugSession extends DebugAdapterSessionImpl implements theia.DebugSession {
+    readonly type: string;
+    readonly name: string;
+
+    seq = 1000000;
+
+    private readonly onDidReceiveDebugSessionCustomEmitter = new Emitter<theia.DebugSessionCustomEvent>();
+    get onDidReceiveDebugSessionCustomEvent(): theia.Event<theia.DebugSessionCustomEvent> {
+        return this.onDidReceiveDebugSessionCustomEmitter.event;
+    }
+
+    constructor(
+        readonly id: string,
+        readonly configuration: theia.DebugConfiguration,
+        readonly communicationProvider: CommunicationProvider) {
+
+        super(id, communicationProvider);
+
+        this.type = configuration.type;
+        this.name = configuration.name;
+    }
+
+    async start(channel: IWebSocket): Promise<void> {
+        super.start(channel);
+    }
+
+    protected send(message: string): void {
+        const protocolMessage = JSON.parse(message) as DebugProtocol.ProtocolMessage;
+        if (protocolMessage.type === 'event') {
+            const event = protocolMessage as DebugProtocol.Event;
+            this.onDidReceiveDebugSessionCustomEmitter.fire({ session: this, ...event });
+        }
+
+        super.send(message);
+    }
+
+    async customRequest(command: string, args?: any): Promise<any> {
+        const request: DebugProtocol.Request = {
+            type: 'request',
+            seq: this.seq++,
+            command,
+            arguments: args
+        };
+
+        super.write(JSON.stringify(request));
+    }
+}
+
+function startDebugAdapter(executable: DebugAdapterExecutable): CommunicationProvider {
+    const { command, args } = executable;
+    const childProcess = spawn(command, args, { stdio: ['pipe', 'pipe', 2] }) as ChildProcess;
+
+    return {
+        input: childProcess.stdin,
+        output: childProcess.stdout,
+        dispose: () => childProcess.kill()
+    };
 }

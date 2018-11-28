@@ -69,7 +69,6 @@ export namespace VSCodeDebuggerContribution {
     }
 }
 
-// TODO move to @theia/debug
 export class VSCodeDebugAdapterContribution implements DebugAdapterContribution {
 
     protected readonly debuggerContribution: Promise<VSCodeDebuggerContribution>;

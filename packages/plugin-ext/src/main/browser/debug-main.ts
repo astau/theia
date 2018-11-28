@@ -32,16 +32,21 @@ import { DebugConsoleSession } from '@theia/debug/lib/browser/console/debug-cons
 import { SourceBreakpoint } from '@theia/debug/lib/browser/breakpoint/breakpoint-marker';
 import { DebugPluginContributor, DebugContributionManager } from '@theia/debug/lib/browser/debug-contribution-manager';
 import { DebugConfiguration } from '@theia/debug/lib/common/debug-configuration';
+import { CommandRegistry } from '@theia/core/lib/common/command';
 
 export class DebugMainImpl implements DebugMain {
     private readonly proxy: DebugExt;
+
     private readonly sessionManager: DebugSessionManager;
     private readonly labelProvider: LabelProvider;
     private readonly editorManager: EditorManager;
     private readonly breakpointsManager: BreakpointManager;
     private readonly debugConsoleSession: DebugConsoleSession;
-    private readonly proxyContributors = new Map<string, DebugPluginContributor>();
     private readonly contributionManager: DebugContributionManager;
+    private readonly commandRegistry: CommandRegistry;
+
+    // registered plugins per contributorId
+    private readonly proxyContributors = new Map<string, DebugPluginContributor>();
 
     constructor(rpc: RPCProtocol, container: interfaces.Container) {
         this.proxy = rpc.getProxy(MAIN_RPC_CONTEXT.DEBUG_EXT);
@@ -51,6 +56,7 @@ export class DebugMainImpl implements DebugMain {
         this.editorManager = container.get(EditorManager);
         this.breakpointsManager = container.get(BreakpointManager);
         this.debugConsoleSession = container.get(DebugConsoleSession);
+        this.commandRegistry = container.get(CommandRegistry);
 
         // TODO: distinguish added/deleted breakpoints
         this.breakpointsManager.onDidChangeMarkers(uri => {
@@ -59,13 +65,9 @@ export class DebugMainImpl implements DebugMain {
             this.proxy.$breakpointsDidChange(this.toTheiaPluginApiBreakpoints(all), [], [], this.toTheiaPluginApiBreakpoints(affected));
         });
 
-        this.sessionManager.onDidCreateDebugSession(debugSession => this.proxy.$sessionDidCreate(debugSession.id, debugSession.configuration));
-        this.sessionManager.onDidDestroyDebugSession(debugSession => this.proxy.$sessionDidDestroy(debugSession.id, debugSession.configuration));
-        this.sessionManager.onDidChangeActiveDebugSession(event => {
-            const sessionId = event.current && event.current.id;
-            const configuration = event.current && event.current.configuration;
-            this.proxy.$sessionDidChange(sessionId, configuration);
-        });
+        this.sessionManager.onDidCreateDebugSession(debugSession => this.proxy.$sessionDidCreate(debugSession.id));
+        this.sessionManager.onDidDestroyDebugSession(debugSession => this.proxy.$sessionDidDestroy(debugSession.id));
+        this.sessionManager.onDidChangeActiveDebugSession(event => this.proxy.$sessionDidChange(event.current && event.current.id));
     }
 
     async $appendToDebugConsole(value: string): Promise<void> {
@@ -90,8 +92,9 @@ export class DebugMainImpl implements DebugMain {
             getSupportedLanguages: () => this.proxy.$getSupportedLanguages(contributorId),
             getSchemaAttributes: () => this.proxy.$getSchemaAttributes(contributorId),
             getConfigurationSnippets: () => this.proxy.$getConfigurationSnippets(contributorId),
-            createDebugSession: (config: DebugConfiguration) => Promise.resolve(''),
-            terminateDebugSession: () => Promise.resolve(undefined)
+
+            createDebugSession: (debugConfiguration: DebugConfiguration) => this.proxy.$createDebugSession(contributorId, debugConfiguration),
+            terminateDebugSession: (sessionId: string) => this.proxy.$terminateDebugSession(sessionId)
         };
 
         this.proxyContributors.set(contributorId, proxyContributor);
@@ -112,6 +115,10 @@ export class DebugMainImpl implements DebugMain {
 
     async $removeBreakpoints(breakpoints: Breakpoint[]): Promise<void> {
         this.sessionManager.removeBreakpoints(this.toInternalBreakpoints(breakpoints));
+    }
+
+    async $executeCommand(commandId: string): Promise<any> {
+        return this.commandRegistry.executeCommand(commandId);
     }
 
     private toInternalBreakpoints(breakpoints: Breakpoint[]): DebugBreakpoint[] {

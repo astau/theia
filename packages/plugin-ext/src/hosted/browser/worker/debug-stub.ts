@@ -18,6 +18,7 @@ import { RPCProtocol } from '../../../api/rpc-protocol';
 import * as theia from '@theia/plugin';
 import { DebugExtImpl } from '../../../plugin/node/debug';
 import { Disposable } from '../../../plugin/types-impl';
+import { PluginPackageDebuggersContribution } from '../../../common';
 
 /**
  * Debug API requires access to node to start Debug Adapter.
@@ -72,7 +73,11 @@ export class DebugExtStub extends DebugExtImpl {
         throw new Error('Debug API works only in plugin container');
     }
 
-    registerDebugConfigurationProvider(debugType: string, provider: theia.DebugConfigurationProvider, pluginPath: string): Disposable {
+    registerDebugConfigurationProvider(
+        debugType: string,
+        provider: theia.DebugConfigurationProvider,
+        packageContribution: PluginPackageDebuggersContribution,
+        pluginPath: string): Disposable {
         throw new Error('Debug API works only in plugin container');
     }
 }

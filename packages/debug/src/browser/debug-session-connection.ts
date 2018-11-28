@@ -20,9 +20,9 @@ import { WebSocketConnectionProvider } from '@theia/core/lib/browser';
 import { DebugProtocol } from 'vscode-debugprotocol';
 import { Deferred } from '@theia/core/lib/common/promise-util';
 import { Emitter, Event, DisposableCollection, Disposable } from '@theia/core';
-import { WebSocketChannel } from '@theia/core/lib/common/messaging/web-socket-channel';
 import { DebugAdapterPath } from '../common/debug-service';
 import { OutputChannel } from '@theia/output/lib/common/output-channel';
+import { IWebSocket } from 'vscode-ws-jsonrpc/lib/socket/socket';
 
 export interface DebugExitEvent {
     code?: number
@@ -88,7 +88,7 @@ export class DebugSessionConnection implements Disposable {
     private sequence = 1;
 
     protected readonly pendingRequests = new Map<number, (response: DebugProtocol.Response) => void>();
-    protected readonly connection: Promise<WebSocketChannel>;
+    protected readonly connection: Promise<IWebSocket>;
 
     protected readonly onDidEventEmitter = new Emitter<DebugProtocol.Event | DebugExitEvent>();
     readonly onDidEvent: Event<DebugProtocol.Event | DebugExitEvent> = this.onDidEventEmitter.event;
@@ -122,8 +122,8 @@ export class DebugSessionConnection implements Disposable {
         this.toDispose.dispose();
     }
 
-    protected createConnection(): Promise<WebSocketChannel> {
-        return new Promise<WebSocketChannel>(resolve =>
+    protected createConnection(): Promise<IWebSocket> {
+        return new Promise<IWebSocket>(resolve =>
             this.connectionProvider.openChannel(`${DebugAdapterPath}/${this.sessionId}`, channel => {
                 if (this.disposed) {
                     channel.close();

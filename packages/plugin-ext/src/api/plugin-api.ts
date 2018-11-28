@@ -778,17 +778,19 @@ export interface LanguagesMain {
 }
 
 export interface DebugExt {
-    $onSessionCustomEvent(sessionId: string, debugConfiguration: theia.DebugConfiguration, event: string, body?: any): void;
+    $onSessionCustomEvent(sessionId: string, event: string, body?: any): void;
     $breakpointsDidChange(all: Breakpoint[], added: Breakpoint[], removed: Breakpoint[], changed: Breakpoint[]): void;
-    $sessionDidCreate(sessionId: string, debugConfiguration: theia.DebugConfiguration): void;
-    $sessionDidDestroy(sessionId: string, debugConfiguration: theia.DebugConfiguration): void;
-    $sessionDidChange(sessionId: string | undefined, debugConfiguration?: theia.DebugConfiguration): void;
+    $sessionDidCreate(sessionId: string): void;
+    $sessionDidDestroy(sessionId: string): void;
+    $sessionDidChange(sessionId: string | undefined): void;
     $provideDebugConfigurations(contributionId: string, folder: string | undefined): Promise<theia.DebugConfiguration[]>;
     $resolveDebugConfigurations(contributionId: string, debugConfiguration: theia.DebugConfiguration, folder: string | undefined): Promise<theia.DebugConfiguration | undefined>;
     $getSupportedLanguages(contributionId: string): Promise<string[]>;
     $getSchemaAttributes(contributionId: string): Promise<IJSONSchema[]>;
     $getConfigurationSnippets(contributionId: string): Promise<IJSONSchemaSnippet[]>;
     $getDebuggerDescription(contributionId: string): Promise<DebuggerDescription>;
+    $createDebugSession(contributionId: string, debugConfiguration: theia.DebugConfiguration): Promise<string>;
+    $terminateDebugSession(sessionId: string): Promise<void>;
 }
 
 export interface DebugMain {
@@ -798,6 +800,7 @@ export interface DebugMain {
     $unregisterDebugConfigurationProvider(contributorId: string): Promise<void>;
     $addBreakpoints(breakpoints: Breakpoint[]): Promise<void>;
     $removeBreakpoints(breakpoints: Breakpoint[]): Promise<void>;
+    $executeCommand(commandId: string): Promise<any>;
 }
 
 export const PLUGIN_RPC_CONTEXT = {

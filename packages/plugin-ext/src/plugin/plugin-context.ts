@@ -92,6 +92,7 @@ import { CancellationToken } from '@theia/core/lib/common/cancellation';
 import { MarkdownString } from './markdown-string';
 import { TreeViewsExtImpl } from './tree/tree-views';
 import { DebugExtImpl } from './node/debug';
+import { PluginPackageDebuggersContribution } from '../common';
 
 export function createAPIFactory(
     rpc: RPCProtocol,
@@ -430,7 +431,17 @@ export function createAPIFactory(
                 return debugExt.onDidChangeBreakpoints;
             },
             registerDebugConfigurationProvider(debugType: string, provider: theia.DebugConfigurationProvider): Disposable {
-                return debugExt.registerDebugConfigurationProvider(debugType, provider, plugin.pluginFolder);
+                const debuggersContribution = plugin.rawModel.contributes && plugin.rawModel.contributes.debuggers;
+                if (debuggersContribution) {
+                    const contribution = debuggersContribution.filter((value: PluginPackageDebuggersContribution) => value.type === debugType)[0];
+                    if (contribution) {
+                        console.info(`Registered debug contribution provider: '${debugType}'`);
+                        return debugExt.registerDebugConfigurationProvider(debugType, provider, contribution, plugin.pluginFolder);
+                    }
+                }
+
+                console.warn(`There is no package contribution with type ${debugType}`);
+                return Disposable.create(() => { });
             },
             startDebugging(folder: theia.WorkspaceFolder | undefined, nameOrConfiguration: string | theia.DebugConfiguration): Thenable<boolean> {
                 return debugExt.startDebugging(folder, nameOrConfiguration);

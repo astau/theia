@@ -21,60 +21,10 @@
 
 // Some entities copied and modified from https://github.com/Microsoft/vscode-debugadapter-node/blob/master/adapter/src/protocol.ts
 
-import * as net from 'net';
-import { injectable, inject } from 'inversify';
-import { Disposable, DisposableCollection } from '@theia/core';
-import {
-    RawProcessFactory,
-    ProcessManager,
-    RawProcess
-} from '@theia/process/lib/node';
-import {
-    DebugAdapterExecutable,
-    CommunicationProvider,
-    DebugAdapterSession,
-    DebugAdapterSessionFactory,
-    DebugAdapterFactory
-} from './debug-model';
+import { CommunicationProvider, DebugAdapterSession } from './debug-model';
 import { DebugProtocol } from 'vscode-debugprotocol';
-import { WebSocketChannel } from '@theia/core/lib/common/messaging/web-socket-channel';
-
-/**
- * [DebugAdapterFactory](#DebugAdapterFactory) implementation based on
- * launching the debug adapter as separate process.
- */
-@injectable()
-export class LaunchBasedDebugAdapterFactory implements DebugAdapterFactory {
-    @inject(RawProcessFactory)
-    protected readonly processFactory: RawProcessFactory;
-    @inject(ProcessManager)
-    protected readonly processManager: ProcessManager;
-
-    start(executable: DebugAdapterExecutable): CommunicationProvider {
-        const process = this.spawnProcess(executable);
-        // FIXME: propagate onError + onExit
-        return {
-            input: process.input,
-            output: process.output,
-            dispose: () => process.kill()
-        };
-    }
-
-    private spawnProcess(executable: DebugAdapterExecutable): RawProcess {
-        const { command, args } = executable;
-        return this.processFactory({ command, args, options: { stdio: ['pipe', 'pipe', 2] } });
-    }
-
-    connect(debugServerPort: number): CommunicationProvider {
-        const socket = net.createConnection(debugServerPort);
-        // FIXME: propagate socket.on('error', ...) + socket.on('close', ...)
-        return {
-            input: socket,
-            output: socket,
-            dispose: () => socket.end()
-        };
-    }
-}
+import { DisposableCollection, Disposable } from '@theia/core/lib/common/disposable';
+import { IWebSocket } from 'vscode-ws-jsonrpc/lib/socket/socket';
 
 /**
  * [DebugAdapterSession](#DebugAdapterSession) implementation.
@@ -84,7 +34,7 @@ export class DebugAdapterSessionImpl implements DebugAdapterSession {
     private static TWO_CRLF = '\r\n\r\n';
 
     private readonly toDispose = new DisposableCollection();
-    private channel: WebSocketChannel | undefined;
+    private channel: IWebSocket | undefined;
     private contentLength: number;
     private buffer: Buffer;
 
@@ -101,7 +51,7 @@ export class DebugAdapterSessionImpl implements DebugAdapterSession {
         ]);
     }
 
-    async start(channel: WebSocketChannel): Promise<void> {
+    async start(channel: IWebSocket): Promise<void> {
         if (this.channel) {
             throw new Error('The session has already been started, id: ' + this.id);
         }
@@ -183,19 +133,5 @@ export class DebugAdapterSessionImpl implements DebugAdapterSession {
 
     async stop(): Promise<void> {
         this.toDispose.dispose();
-    }
-}
-
-/**
- * [DebugAdapterSessionFactory](#DebugAdapterSessionFactory) implementation.
- */
-@injectable()
-export class DebugAdapterSessionFactoryImpl implements DebugAdapterSessionFactory {
-
-    get(sessionId: string, communicationProvider: CommunicationProvider): DebugAdapterSession {
-        return new DebugAdapterSessionImpl(
-            sessionId,
-            communicationProvider
-        );
     }
 }

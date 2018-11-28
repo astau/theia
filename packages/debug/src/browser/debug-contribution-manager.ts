@@ -134,7 +134,7 @@ export class DebugContributionManager {
     async stop(debugType: string, sessionId: string): Promise<void> {
         const contributor = this.pluginContributors.get(debugType);
         if (contributor) {
-            return contributor.terminateDebugSession();
+            return contributor.terminateDebugSession(sessionId);
         } else {
             return this.debugService.terminateDebugSession(sessionId);
         }
@@ -154,5 +154,5 @@ export interface DebugPluginContributor {
     provideDebugConfigurations(workspaceFolderUri: string | undefined): Promise<DebugConfiguration[]>;
     resolveDebugConfiguration(config: DebugConfiguration, workspaceFolderUri: string | undefined): Promise<DebugConfiguration | undefined>;
     createDebugSession(config: DebugConfiguration): Promise<string>;
-    terminateDebugSession(): Promise<void>;
+    terminateDebugSession(sessionId: string): Promise<void>;
 }
