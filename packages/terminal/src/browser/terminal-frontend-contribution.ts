@@ -26,7 +26,7 @@ import {
 } from '@theia/core/lib/common';
 import {
     ApplicationShell, KeybindingContribution, KeyCode, Key,
-    KeyModifier, KeybindingRegistry, Widget
+    KeyModifier, KeybindingRegistry, Widget, QuickPickService
 } from '@theia/core/lib/browser';
 import { TabBarToolbarContribution, TabBarToolbarRegistry } from '@theia/core/lib/browser/shell/tab-bar-toolbar';
 import { WidgetManager } from '@theia/core/lib/browser';
@@ -35,9 +35,10 @@ import { TerminalKeybindingContexts } from './terminal-keybinding-contexts';
 import { TerminalService } from './base/terminal-service';
 import { TerminalWidgetOptions, TerminalWidget } from './base/terminal-widget';
 import { UriAwareCommandHandler } from '@theia/core/lib/common/uri-command-handler';
-import { FileSystem } from '@theia/filesystem/lib/common';
+import { FileSystem, FileStat, FileSystemUtils } from '@theia/filesystem/lib/common';
 import URI from '@theia/core/lib/common/uri';
 import { MAIN_MENU_BAR } from '@theia/core';
+import { WorkspaceService } from '@theia/workspace/lib/browser';
 
 export namespace TerminalMenus {
     export const TERMINAL = [...MAIN_MENU_BAR, '7_terminal'];
@@ -52,6 +53,11 @@ export namespace TerminalCommands {
         id: 'terminal:new',
         category: TERMINAL_CATEGORY,
         label: 'Open New Terminal'
+    };
+    export const NEW_AW: Command = {
+        id: 'terminal:new:wd:',
+        category: TERMINAL_CATEGORY,
+        label: 'Open New Terminal (In Active Workspace)'
     };
     export const TERMINAL_CLEAR: Command = {
         id: 'terminal:clear',
@@ -78,11 +84,19 @@ export class TerminalFrontendContribution implements TerminalService, CommandCon
         @inject(WidgetManager) protected readonly widgetManager: WidgetManager,
         @inject(FileSystem) protected readonly fileSystem: FileSystem,
         @inject(SelectionService) protected readonly selectionService: SelectionService,
+        @inject(QuickPickService) protected readonly quickPick: QuickPickService,
+        @inject(WorkspaceService) protected readonly workspaceService: WorkspaceService
     ) { }
+
+    protected homeStat: FileStat | undefined = undefined;
+    protected home: string | undefined = undefined;
 
     registerCommands(commands: CommandRegistry): void {
         commands.registerCommand(TerminalCommands.NEW, {
             execute: () => this.openTerminal()
+        });
+        commands.registerCommand(TerminalCommands.NEW_AW, {
+            execute: () => this.openActiveWorkspaceTerminal()
         });
         commands.registerCommand(TerminalCommands.SPLIT, {
             execute: widget => this.splitTerminal(widget),
@@ -143,6 +157,10 @@ export class TerminalFrontendContribution implements TerminalService, CommandCon
     registerKeybindings(keybindings: KeybindingRegistry): void {
         keybindings.registerKeybinding({
             command: TerminalCommands.NEW.id,
+            keybinding: 'ctrl+shift+`'
+        });
+        keybindings.registerKeybinding({
+            command: TerminalCommands.NEW_AW.id,
             keybinding: 'ctrl+`'
         });
         keybindings.registerKeybinding({
@@ -251,6 +269,18 @@ export class TerminalFrontendContribution implements TerminalService, CommandCon
         this.shell.activateWidget(widget.id);
     }
 
+    protected async selectTerminalCwd(): Promise<string | undefined> {
+        this.homeStat = (!this.homeStat) ? await this.fileSystem.getCurrentUserHome() : undefined;
+        this.home = (this.homeStat) ? new URI(this.homeStat.uri).withoutScheme().toString() : undefined;
+        const roots = this.workspaceService.tryGetRoots();
+        return this.quickPick.show(roots.map(
+            ({ uri }) => ({
+                label: (this.home) ? FileSystemUtils.tildifyPath(new URI(uri).path.toString(), this.home) : new URI(uri).path.toString(),
+                value: uri
+            })
+        ), { placeholder: 'Select current working directory for new terminal' });
+    }
+
     protected async splitTerminal(widget?: Widget): Promise<void> {
         const ref = this.getTerminalRef(widget);
         if (ref) {
@@ -264,6 +294,13 @@ export class TerminalFrontendContribution implements TerminalService, CommandCon
     }
 
     protected async openTerminal(options?: ApplicationShell.WidgetOptions): Promise<void> {
+        const cwd = await this.selectTerminalCwd();
+        const termWidget = await this.newTerminal({ cwd });
+        termWidget.start();
+        this.activateTerminal(termWidget, options);
+    }
+
+    protected async openActiveWorkspaceTerminal(options?: ApplicationShell.WidgetOptions): Promise<void> {
         const termWidget = await this.newTerminal({});
         termWidget.start();
         this.activateTerminal(termWidget, options);
