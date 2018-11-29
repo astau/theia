@@ -19,7 +19,7 @@ import { MenuBar as MenuBarWidget, Menu as MenuWidget, Widget } from '@phosphor/
 import { CommandRegistry as PhosphorCommandRegistry } from '@phosphor/commands';
 import {
     CommandRegistry, ActionMenuNode, CompositeMenuNode,
-    MenuModelRegistry, MAIN_MENU_BAR, MenuPath
+    MenuModelRegistry, MAIN_MENU_BAR, MenuPath, ILogger
 } from '../../common';
 import { KeybindingRegistry, Keybinding } from '../keybinding';
 import { FrontendApplicationContribution, FrontendApplication } from '../frontend-application';
@@ -27,11 +27,17 @@ import { FrontendApplicationContribution, FrontendApplication } from '../fronten
 @injectable()
 export class BrowserMainMenuFactory {
 
-    constructor(
-        @inject(CommandRegistry) protected readonly commandRegistry: CommandRegistry,
-        @inject(KeybindingRegistry) protected readonly keybindingRegistry: KeybindingRegistry,
-        @inject(MenuModelRegistry) protected readonly menuProvider: MenuModelRegistry
-    ) { }
+    @inject(CommandRegistry)
+    protected readonly commandRegistry: CommandRegistry;
+
+    @inject(KeybindingRegistry)
+    protected readonly keybindingRegistry: KeybindingRegistry;
+
+    @inject(MenuModelRegistry)
+    protected readonly menuProvider: MenuModelRegistry;
+
+    @inject(ILogger)
+    protected readonly logger: ILogger;
 
     createMenuBar(): MenuBarWidget {
         const menuBar = new DynamicMenuBarWidget();
@@ -77,6 +83,10 @@ export class BrowserMainMenuFactory {
     protected addPhosphorCommand(commands: PhosphorCommandRegistry, menu: ActionMenuNode): void {
         const command = this.commandRegistry.getCommand(menu.action.commandId);
         if (!command) {
+            return;
+        }
+        if (commands.hasCommand(command.id)) {
+            this.logger.warn(`Command with ID ${command.id} is already registered`);
             return;
         }
         commands.addCommand(command.id, {
