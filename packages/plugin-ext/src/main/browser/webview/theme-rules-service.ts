@@ -18,7 +18,14 @@ import { ThemeService } from '@theia/core/lib/browser/theming';
 
 export const ThemeRulesServiceSymbol = Symbol('ThemeRulesService');
 
+interface IconPath {
+    light: string,
+    dark: string
+}
+
 export class ThemeRulesService {
+    private styleElement?: HTMLStyleElement;
+    private icons = new Map<string, IconPath | string>();
     protected readonly themeService = ThemeService.get();
     protected readonly themeRules = new Map<string, string[]>();
 
@@ -30,25 +37,18 @@ export class ThemeRulesService {
     protected constructor() {
         const global = window as any; // tslint:disable-line
         global[ThemeRulesServiceSymbol] = this;
+
+        this.themeService.onThemeChange(() => {
+            this.updateIconStyleElement();
+        });
     }
 
-    setRules(styleSheet: HTMLElement, newRules: string[]): boolean {
-        const sheet: {
-            insertRule: (rule: string, index: number) => void;
-            removeRule: (index: number) => void;
-            rules: CSSRuleList;
-        } | undefined = (<any>styleSheet).sheet;
-
-        if (!sheet) {
-            return false;
-        }
-        for (let index = sheet.rules!.length; index > 0; index--) {
-            sheet.removeRule(0);
-        }
-        newRules.forEach((rule: string, index: number) => {
-            sheet.insertRule(rule, index);
-        });
-        return true;
+    createStyleSheet(container: HTMLElement = document.getElementsByTagName('head')[0]): HTMLStyleElement {
+        const style = document.createElement('style');
+        style.type = 'text/css';
+        style.media = 'screen';
+        container.appendChild(style);
+        return style;
     }
 
     getCurrentThemeRules(): string[] {
@@ -79,5 +79,70 @@ export class ThemeRulesService {
         }
 
         return cssText;
+    }
+
+    setRules(styleSheet: HTMLElement, newRules: string[]): boolean {
+        const sheet: {
+            insertRule: (rule: string, index: number) => void;
+            removeRule: (index: number) => void;
+            rules: CSSRuleList;
+        } | undefined = (<any>styleSheet).sheet;
+
+        if (!sheet) {
+            return false;
+        }
+        for (let index = sheet.rules!.length; index > 0; index--) {
+            sheet.removeRule(0);
+        }
+        newRules.forEach((rule: string, index: number) => {
+            sheet.insertRule(rule, index);
+        });
+        return true;
+    }
+
+    setIconPath(webviewId: string, iconPath: IconPath | string | undefined) {
+        if (!iconPath) {
+            this.icons.delete(webviewId);
+        } else {
+            this.icons.set(webviewId, <IconPath | string>iconPath);
+        }
+        if (!this.styleElement) {
+            this.styleElement = this.createStyleSheet();
+            this.styleElement.id = 'webview-icons';
+        }
+        this.updateIconStyleElement();
+    }
+
+    private updateIconStyleElement() {
+        if (!this.styleElement) {
+            return;
+        }
+        const cssRules: string[] = [`.webview-icon::before {
+            background-repeat: no-repeat;
+            display: inline-block;
+            text-align: center;
+            vertical-align: middle;
+            height: 11px;
+            width: 11px;
+            content: "";
+        }`];
+        this.icons.forEach((value, key) => {
+            let path: string;
+            if (typeof value === 'string') {
+                path = value;
+            } else {
+                path = this.isDark() ? value.dark : value.light;
+            }
+            if (path.startsWith('/')) {
+                path = `/webview${path}`;
+            }
+            cssRules.push(`.webview-icon.${key}-file-icon::before { background-image: url(${path}); }`);
+        });
+        this.styleElement.innerHTML = cssRules.join('\n');
+    }
+
+    private isDark(): boolean {
+        const currentThemeId: string = this.themeService.getCurrentTheme().id;
+        return !currentThemeId.includes('light');
     }
 }

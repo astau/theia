@@ -61,17 +61,16 @@ export class WebviewsMainImpl implements WebviewsMain {
             },
             onLoad: contentDocument => {
                 const styleId = 'webview-widget-theme';
-                let styleElement: HTMLElement | null | undefined;
+                let styleElement: HTMLStyleElement | null | undefined;
                 if (!toDispose.disposed) {
                     // if reload the frame
                     toDispose.dispose();
-                    styleElement = contentDocument.getElementById(styleId);
+                    styleElement = <HTMLStyleElement>contentDocument.getElementById(styleId);
                 }
                 if (!styleElement) {
-                    styleElement = contentDocument.createElement('style');
-                    styleElement.setAttribute('type', 'text/css');
-                    styleElement.setAttribute('id', styleId);
                     const parent = contentDocument.head ? contentDocument.head : contentDocument.body;
+                    styleElement = this.themeRulesService.createStyleSheet(parent);
+                    styleElement.id = styleId;
                     parent.appendChild((styleElement));
                 }
 
@@ -102,8 +101,10 @@ export class WebviewsMainImpl implements WebviewsMain {
         const webview = this.getWebview(handle);
         webview.title.label = value;
     }
-    $setIconPath(handle: string, value: { light: UriComponents; dark: UriComponents; } | undefined): void {
-        throw new Error('Method not implemented.');
+    $setIconPath(handle: string, iconPath: { light: string; dark: string; } | string | undefined): void {
+        const webview = this.getWebview(handle);
+        webview.setIconClass(iconPath ? `webview-icon ${webview.id}-file-icon` : '');
+        this.themeRulesService.setIconPath(webview.id, iconPath);
     }
     $setHtml(handle: string, value: string): void {
         const webview = this.getWebview(handle);
@@ -136,6 +137,10 @@ export class WebviewsMainImpl implements WebviewsMain {
     }
 
     private onCloseView(viewId: string) {
+        const view = this.views.get(viewId);
+        if (view) {
+            this.themeRulesService.setIconPath(view.id, undefined);
+        }
         const cleanUp = () => {
             this.views.delete(viewId);
         };

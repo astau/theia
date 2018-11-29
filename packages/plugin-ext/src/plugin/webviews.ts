@@ -235,6 +235,18 @@ export class WebviewPanelImpl implements theia.WebviewPanel {
         }
     }
 
+    set iconPath(iconPath: theia.Uri | { light: theia.Uri; dark: theia.Uri }) {
+        this.checkIsDisposed();
+        if (URI.isUri(iconPath)) {
+            this.proxy.$setIconPath(this.viewId, (<theia.Uri>iconPath).path);
+        } else {
+            this.proxy.$setIconPath(this.viewId, {
+                light: (<{ light: theia.Uri; dark: theia.Uri }>iconPath).light.path,
+                dark: (<{ light: theia.Uri; dark: theia.Uri }>iconPath).dark.path
+            });
+        }
+    }
+
     get webview() {
         this.checkIsDisposed();
         return this._webview;

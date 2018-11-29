@@ -30,26 +30,18 @@ export interface WebviewEvents {
 
 export class WebviewWidget extends BaseWidget {
     private static readonly ID = new IdGenerator('webview-widget-');
-
     protected readonly toDispose = new DisposableCollection();
     private iframe: HTMLIFrameElement;
     private state: string | undefined = undefined;
     private loadTimeout: number | undefined;
-    //    private pendingMessages
+
     constructor(title: string, private options: WebviewWidgetOptions, private eventDelegate: WebviewEvents) {
         super();
         this.id = WebviewWidget.ID.nextId();
         this.title.closable = true;
-        // this.title.caption = this.title.label = this.props.name || 'Browser';
         this.title.label = title;
-        // this.title.iconClass = this.props.iconClass || MiniBrowser.ICON;
         this.addClass(MiniBrowser.Styles.MINI_BROWSER);
 
-    }
-
-    protected onFrameLoad(): void {
-        // this.hideLoadIndicator();
-        // this.focus();
     }
 
     protected handleMessage(message: any) {
@@ -70,11 +62,83 @@ export class WebviewWidget extends BaseWidget {
         if (!this.iframe || this.options.allowScripts === options.allowScripts) {
             return;
         }
-
         this.updateSandboxAttribute(this.iframe, options.allowScripts);
-
         this.options = options;
         this.reloadFrame();
+    }
+
+    setIconClass(iconClass: string) {
+        this.title.iconClass = iconClass;
+    }
+
+    setHTML(html: string) {
+        html = html.replace('theia-resource:/', '/webview/');
+        html = html.replace('vscode-resource:/', '/webview/');
+        const newDocument = new DOMParser().parseFromString(html, 'text/html');
+        if (!newDocument || !newDocument.body) {
+            return;
+        }
+        (<any>newDocument.querySelectorAll('a')).forEach((a: any) => {
+            if (!a.title) {
+                a.title = a.href;
+            }
+        });
+        this.updateApiScript(newDocument);
+        const previousPendingFrame = this.iframe;
+        if (previousPendingFrame) {
+            previousPendingFrame.setAttribute('id', '');
+            this.node.removeChild(previousPendingFrame);
+        }
+        const newFrame = document.createElement('iframe');
+        newFrame.setAttribute('id', 'pending-frame');
+        newFrame.setAttribute('frameborder', '0');
+        newFrame.style.cssText = 'display: block; margin: 0; overflow: hidden; position: absolute; width: 100%; height: 100%; visibility: hidden';
+        this.node.appendChild(newFrame);
+        this.iframe = newFrame;
+        newFrame.contentDocument!.open('text/html', 'replace');
+
+        const onLoad = (contentDocument: any, contentWindow: any) => {
+            if (contentDocument.body) {
+                if (this.eventDelegate && this.eventDelegate.onKeyboardEvent) {
+                    const eventNames = ['keydown', 'keypress', 'click'];
+                    // Delegate events from the `iframe` to the application.
+                    eventNames.forEach((eventName: string) => {
+                        contentDocument.addEventListener(eventName, this.eventDelegate.onKeyboardEvent!, true);
+                        this.toDispose.push(Disposable.create(() => contentDocument.removeEventListener(eventName, this.eventDelegate.onKeyboardEvent!)));
+                    });
+                }
+                if (this.eventDelegate && this.eventDelegate.onLoad) {
+                    this.eventDelegate.onLoad(<Document>contentDocument);
+                }
+            }
+            if (newFrame && newFrame.contentDocument === contentDocument) {
+                (<any>contentWindow).postMessageExt = (e: any) => {
+                    this.handleMessage(e);
+                };
+                newFrame.style.visibility = 'visible';
+                newFrame.contentWindow!.focus();
+            }
+        };
+
+        clearTimeout(this.loadTimeout);
+        this.loadTimeout = undefined;
+        this.loadTimeout = window.setTimeout(() => {
+            clearTimeout(this.loadTimeout);
+            this.loadTimeout = undefined;
+            onLoad(newFrame.contentDocument, newFrame.contentWindow);
+        }, 200);
+
+        newFrame.contentWindow!.addEventListener('load', e => {
+            if (this.loadTimeout) {
+                clearTimeout(this.loadTimeout);
+                this.loadTimeout = undefined;
+                onLoad(e.target, newFrame.contentWindow);
+            }
+        });
+        newFrame.contentDocument!.write(newDocument!.documentElement!.innerHTML);
+        newFrame.contentDocument!.close();
+
+        this.updateSandboxAttribute(newFrame);
     }
 
     private reloadFrame() {
@@ -93,9 +157,9 @@ export class WebviewWidget extends BaseWidget {
     }
 
     private updateApiScript(contentDocument: Document, isAllowScript?: boolean) {
-         if (!contentDocument) {
-             return;
-         }
+        if (!contentDocument) {
+            return;
+        }
         const allowScripts = isAllowScript !== undefined ? isAllowScript : this.options.allowScripts;
         const scriptId = 'webview-widget-codeApi';
         if (!allowScripts) {
@@ -143,98 +207,6 @@ export class WebviewWidget extends BaseWidget {
         } else {
             parent.appendChild(codeApiScript);
         }
-    }
-
-    setHTML(html: string) {
-        html = html.replace('theia-resource:/', '/webview/');
-        html = html.replace('vscode-resource:/', '/webview/');
-        const newDocument = new DOMParser().parseFromString(html, 'text/html');
-        if (!newDocument || !newDocument.body) {
-            return;
-        }
-        (<any>newDocument.querySelectorAll('a')).forEach((a: any) => {
-            if (!a.title) {
-                a.title = a.href;
-            }
-        });
-        this.updateApiScript(newDocument);
-        const previousPendingFrame = this.iframe;
-        if (previousPendingFrame) {
-            previousPendingFrame.setAttribute('id', '');
-            this.node.removeChild(previousPendingFrame);
-        }
-        const newFrame = document.createElement('iframe');
-        newFrame.setAttribute('id', 'pending-frame');
-        newFrame.setAttribute('frameborder', '0');
-        newFrame.style.cssText = 'display: block; margin: 0; overflow: hidden; position: absolute; width: 100%; height: 100%; visibility: hidden';
-        this.node.appendChild(newFrame);
-        this.iframe = newFrame;
-        newFrame.contentDocument!.open('text/html', 'replace');
-
-        const onLoad = (contentDocument: any, contentWindow: any) => {
-            if (contentDocument.body) {
-                // // Workaround for https://github.com/Microsoft/vscode/issues/12865
-                // // check new scrollTop and reset if neccessary
-                // setInitialScrollPosition(contentDocument.body);
-
-                // // Bubble out link clicks
-                // contentDocument.body.addEventListener('click', handleInnerClick);
-
-                if (this.eventDelegate && this.eventDelegate.onKeyboardEvent) {
-                    const eventNames = ['keydown', 'keypress', 'click'];
-                    // Delegate events from the `iframe` to the application.
-                    eventNames.forEach((eventName: string) => {
-                        contentDocument.addEventListener(eventName, this.eventDelegate.onKeyboardEvent!, true);
-                        this.toDispose.push(Disposable.create(() => contentDocument.removeEventListener(eventName, this.eventDelegate.onKeyboardEvent!)));
-                    });
-                }
-                if (this.eventDelegate && this.eventDelegate.onLoad) {
-                    this.eventDelegate.onLoad(<Document>contentDocument);
-                }
-            }
-
-            // const newFrame = getPendingFrame();
-            if (newFrame && newFrame.contentDocument === contentDocument) {
-                // const oldActiveFrame = getActiveFrame();
-                // if (oldActiveFrame) {
-                //     document.body.removeChild(oldActiveFrame);
-                // }
-                (<any>contentWindow).postMessageExt = (e: any) => {
-                    this.handleMessage(e);
-                };
-                // newFrame.setAttribute('id', 'active-frame');
-                newFrame.style.visibility = 'visible';
-                newFrame.contentWindow!.focus();
-
-                // contentWindow.addEventListener('scroll', handleInnerScroll);
-
-                // pendingMessages.forEach((data) => {
-                //     contentWindow.postMessage(data, '*');
-                // });
-                // pendingMessages = [];
-            }
-        };
-
-        clearTimeout(this.loadTimeout);
-        this.loadTimeout = undefined;
-        this.loadTimeout = window.setTimeout(() => {
-            clearTimeout(this.loadTimeout);
-            this.loadTimeout = undefined;
-            onLoad(newFrame.contentDocument, newFrame.contentWindow);
-        }, 200);
-
-        newFrame.contentWindow!.addEventListener('load', e => {
-            if (this.loadTimeout) {
-                clearTimeout(this.loadTimeout);
-                this.loadTimeout = undefined;
-                onLoad(e.target, newFrame.contentWindow);
-            }
-        });
-
-        newFrame.contentDocument!.write(newDocument!.documentElement!.innerHTML);
-        newFrame.contentDocument!.close();
-
-        this.updateSandboxAttribute(newFrame);
     }
 }
 

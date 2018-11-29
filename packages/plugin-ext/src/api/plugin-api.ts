@@ -807,7 +807,7 @@ export interface WebviewsMain {
     $disposeWebview(handle: string): void;
     $reveal(handle: string, showOptions: WebviewPanelShowOptions): void;
     $setTitle(handle: string, value: string): void;
-    $setIconPath(handle: string, value: { light: UriComponents, dark: UriComponents } | undefined): void;
+    $setIconPath(handle: string, value: { light: string, dark: string } | string | undefined): void;
     $setHtml(handle: string, value: string): void;
     $setOptions(handle: string, options: theia.WebviewOptions): void;
     $postMessage(handle: string, value: any): Thenable<boolean>;
